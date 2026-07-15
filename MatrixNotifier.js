@@ -2,6 +2,61 @@ const matrixSdk = require("matrix-js-sdk");
 const QRCode = require("qrcode");
 const fs = require("fs");
 const path = require("path");
+const { stdout, stderr } = require("process");
+const util = require("util");
+
+
+function gentsdate(epochTime, override_opts = {}) {
+    const options = {
+        ...{
+            day: "2-digit",
+            year: "numeric",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+            fractionalSecondDigits: 3,
+            timeZoneName: "long",
+            timeZone: "Asia/Singapore",
+        },
+        ...override_opts,
+    };
+    const dtf = new Intl.DateTimeFormat("en-us", options);
+    const pt = dtf.formatToParts(epochTime);
+    const p = pt.reduce((acc, part) => {
+        acc[part.type] = part.value;
+        return acc;
+    }, {});
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond} ${p.timeZoneName}`;
+}
+
+class TConsole extends console.Console {
+    constructor(...args) {
+        super(...args);
+        this.tslog_tz = "Asia/Singapore";
+    }
+    set_tz(tz) {
+        this.tslog_tz = tz;
+    }
+    tsdate() {
+        return gentsdate(Date.now(), { timeZoneName: "short" });
+    }
+    log(data, ...args) {
+        super.log(`${this.tsdate()} --- `, util.format(data, ...args));
+    }
+    warn(data, ...args) {
+        super.warn(`${this.tsdate()} :::WARN::: `, util.format(data, ...args));
+    }
+    error(data, ...args) {
+        super.error(
+            `${this.tsdate()} ###ERROR### `,
+            util.format(data, ...args),
+        );
+    }
+}
+const dtcon = new TConsole({ stdout, stderr });
+dtcon.set_tz("Asia/Singapore");
 
 class MatrixNotifier {
   constructor(configFilePath) {
@@ -15,7 +70,11 @@ class MatrixNotifier {
       accessToken: this.config.accessToken // This long-lived token does not require refreshing
     });
 
-    console.log("[Matrix Notifier] Core notification framework ready.");
+    setInterval(async () => {
+      await this.pingMatrix();
+    }, 1000*60*15);
+
+    dtcon.log("[Matrix Notifier] Core notification framework ready.");
   }
 
   /**
@@ -27,6 +86,11 @@ class MatrixNotifier {
     }
     const rawData = fs.readFileSync(this.configPath, "utf8");
     this.config = JSON.parse(rawData);
+  }
+
+  async pingMatrix() {
+    const profile = await this.client.getProfileInfo(this.config.userId);
+    dtcon.log(`[Matrix Notifier] Profile: ${JSON.stringify(profile, null, 2)}`);
   }
 
   /**
@@ -65,14 +129,14 @@ class MatrixNotifier {
       });
 
       const eventId = response.event_id;
-      console.log(`[Matrix Notifier] QR alert posted successfully. Event ID: ${eventId}`);
+      dtcon.log(`[Matrix Notifier] QR alert posted successfully. Event ID: ${eventId}`);
 
       return {
         eventId: eventId,
         redact: async (reason) => await this.redactQrAlert(eventId, reason)
       };
     } catch (err) {
-      console.error("[Matrix Notifier] Failed to broadcast QR alert event:", err.message);
+      dtcon.error("[Matrix Notifier] Failed to send QR event:", err.message);
       return null;
     }
   }
@@ -85,10 +149,10 @@ class MatrixNotifier {
       if (!eventId) throw new Error("Missing targeted Event ID parameter string.");
 
       const response = await this.client.redactEvent(this.config.targetRoomId, eventId, null, { reason });
-      console.log(`[Matrix Notifier] Event successfully redacted. Redaction ID: ${response.event_id}`);
+      dtcon.log(`[Matrix Notifier] QR message successfully redacted. Redaction ID: ${response.event_id}`);
       return true;
     } catch (err) {
-      console.error("[Matrix Notifier] Failed to execute timeline redaction:", err.message);
+      dtcon.error("[Matrix Notifier] Failed to execute timeline redaction:", err.message);
       return false;
     }
   }
