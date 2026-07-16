@@ -2,12 +2,12 @@
   "name": "matrixbot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "type": "commonjs",
+  "main": "app.cjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "type": "commonjs",
   "dependencies": {
     "matrix-js-sdk": "^41.9.0",
     "qrcode": "^1.5.4"
