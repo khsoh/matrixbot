@@ -174,32 +174,15 @@ class MatrixNotifier {
         throw new Error("Missing targeted Event ID parameter string.");
       }
 
-      // Delete event only if room is present and message not yet redacted.
-      const room = this.client.getRoom(this.config.targetRoomId);
-      if (room) {
-        const event = room
-          .getLiveTimeLine()
-          .getEvents()
-          .find((e) => e.getId() == eventId);
-        if (event && !event.isRedacted()) {
-          const response = await this.client.redactEvent(
-            this.config.targetRoomId,
-            eventId,
-            null,
-            { reason },
-          );
-          dtcon.log(
-            `[Matrix Notifier] QR message successfully redacted.\n    Event ID: ${eventId}\n    Redaction ID: ${response.event_id}`,
-          );
-        } else {
-          dtcon.log(`[Matrix Notifier] QR message already redacted`);
-        }
-        return true;
-      } else {
-        dtcon.log(
-          `[Matrix Notifier] Cannot find room with ID: ${this.config.targetRoomId}`,
-        );
-      }
+      const response = await this.client.redactEvent(
+        this.config.targetRoomId,
+        eventId,
+        null,
+        { reason },
+      );
+      dtcon.log(
+        `[Matrix Notifier] QR message successfully redacted.\n    Event ID: ${eventId}\n    Redaction ID: ${response.event_id}`,
+      );
       return false;
     } catch (err) {
       dtcon.error(
