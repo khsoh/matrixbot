@@ -96,6 +96,8 @@ class MatrixNotifier {
     if (!fs.existsSync(this.envFilePath)) {
       throw new Error(`Environment file missing at path: ${this.envFilePath}`);
     }
+
+    this.config ??= {}; // Initialize config if not yet initialized
     const result = require("dotenv").config({
       path: this.envFilePath,
       processEnv: this.config,
