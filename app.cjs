@@ -1,22 +1,22 @@
 const MatrixNotifier = require("./MatrixNotifier.cjs");
-const notifier = new MatrixNotifier("./matrix-config.json");
+const notifier = new MatrixNotifier();
 const qrtxt = require("node:fs").readFileSync("./testqr.txt", "utf8");
 
 async function mainAppLoop() {
-    console.log("System automation tracking metrics online...");
+  console.log("System automation tracking metrics online...");
 
-    // 1. Fire temporary session authorization token event block
-    const alertInstance = await notifier.sendQrAlert(
-        qrtxt,
-        "CRITICAL: System incident report generated. This check-in entry card will self-destruct in 5 minutes.",
-        1000 * 60 * 5,
+  // 1. Fire temporary session authorization token event block
+  const alertInstance = await notifier.sendQrAlert(
+    qrtxt,
+    "CRITICAL: System incident report generated. This check-in entry card will self-destruct in 5 minutes.",
+    1000 * 60 * 5,
+  );
+
+  if (alertInstance) {
+    console.log(
+      `Successfully dispatched alert. Tracking Event ID: ${alertInstance.eventId}`,
     );
-
-    if (alertInstance) {
-        console.log(
-            `Successfully dispatched alert. Tracking Event ID: ${alertInstance.eventId}`,
-        );
-    }
+  }
 }
 
 mainAppLoop();
@@ -26,7 +26,7 @@ mainAppLoop();
 const ONE_HOUR = 60 * 60 * 1000;
 
 setInterval(() => {
-    // We fire the async function without 'await' here so that it runs in the background
-    // and does not block Node's primary event loop loop structure.
-    mainAppLoop();
+  // We fire the async function without 'await' here so that it runs in the background
+  // and does not block Node's primary event loop loop structure.
+  mainAppLoop();
 }, ONE_HOUR);
