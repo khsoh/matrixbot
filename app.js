@@ -1,9 +1,9 @@
 const MatrixNotifier = require("./MatrixNotifier");
 const notifier = new MatrixNotifier("./matrix-config.json");
-const qrtxt = require('node:fs').readFileSync('./testqr.txt', 'utf8');
+const qrtxt = require("node:fs").readFileSync("./testqr.txt", "utf8");
 
 // Utility delay timer function
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function mainAppLoop() {
   console.log("System automation tracking metrics online...");
@@ -11,25 +11,14 @@ async function mainAppLoop() {
   // 1. Fire temporary session authorization token event block
   const alertInstance = await notifier.sendQrAlert(
     qrtxt,
-    "CRITICAL: System incident report generated. This check-in entry card will self-destruct in 5 minutes."
+    "CRITICAL: System incident report generated. This check-in entry card will self-destruct in 5 minutes.",
+    1000 * 60 * 5,
   );
 
   if (alertInstance) {
-    console.log(`Successfully dispatched alert. Tracking Event ID: ${alertInstance.eventId}`);
-
-    // 2. Wait for your required operational automation window delay
-    console.log("Waiting 5 minutes for administrative intervention window...");
-
-    setTimeout(async () => {
-      // 3. Execute the deletion using the explicit instance helper
-      console.log("Executing automatic timeline cleanup protocol...");
-      const deleted = await alertInstance.redact("Security token window lifetime expired.");
-
-      if (deleted) {
-        console.log("Element X room canvas wiped successfully.");
-      }
-    }, 1000*60*5);
-
+    console.log(
+      `Successfully dispatched alert. Tracking Event ID: ${alertInstance.eventId}`,
+    );
   }
 }
 
@@ -44,4 +33,3 @@ setInterval(() => {
   // and does not block Node's primary event loop loop structure.
   mainAppLoop();
 }, ONE_HOUR);
-
