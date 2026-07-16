@@ -68,15 +68,15 @@ logger.error = function (...msg) {
 };
 
 class MatrixNotifier {
-  constructor(configFilePath) {
-    this.configPath = path.resolve(configFilePath);
+  constructor(envFilePath = path.resolve(process.cwd(), ".env")) {
+    this.envFilePath = path.resolve(envFilePath);
     this.loadConfig();
 
     // Initialize the Matrix Client with your permanent legacy token params
     this.client = matrixSdk.createClient({
-      baseUrl: this.config.baseUrl,
-      userId: this.config.userId,
-      accessToken: this.config.accessToken, // This long-lived token does not require refreshing
+      baseUrl: this.config.BASEURL,
+      userId: this.config.USERID,
+      accessToken: this.config.ACCESSTOKEN, // This long-lived token does not require refreshing
     });
 
     setInterval(
@@ -93,15 +93,22 @@ class MatrixNotifier {
    * Reads and parses the local configuration JSON file
    */
   loadConfig() {
-    if (!fs.existsSync(this.configPath)) {
-      throw new Error(`Configuration file missing at path: ${this.configPath}`);
+    if (!fs.existsSync(this.envFilePath)) {
+      throw new Error(`Environment file missing at path: ${this.envFilePath}`);
     }
-    const rawData = fs.readFileSync(this.configPath, "utf8");
-    this.config = JSON.parse(rawData);
+    const result = require("dotenv").config({
+      path: this.envFilePath,
+      processEnv: this.config,
+    });
+    if (result.error) {
+      throw new Error(
+        `Failed to read/parse environment file ${this.envFilePath}: ${result.error}`,
+      );
+    }
   }
 
   async pingMatrix() {
-    const profile = await this.client.getProfileInfo(this.config.userId);
+    const profile = await this.client.getProfileInfo(this.config.USERID);
     dtcon.log(`[Matrix Notifier] Profile: ${JSON.stringify(profile, null, 2)}`);
   }
 
@@ -124,7 +131,7 @@ class MatrixNotifier {
 
       // Send the native image event
       const response = await this.client.sendEvent(
-        this.config.targetRoomId,
+        this.config.TARGETROOMID,
         "m.room.message",
         {
           msgtype: "m.image",
@@ -175,7 +182,7 @@ class MatrixNotifier {
       }
 
       const response = await this.client.redactEvent(
-        this.config.targetRoomId,
+        this.config.TARGETROOMID,
         eventId,
         null,
         { reason },

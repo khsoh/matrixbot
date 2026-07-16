@@ -1,0 +1,4 @@
+BASEURL="https://matrix.org"
+USERID="@demobot:matrix.org"
+TARGETROOMID="!ZaZOxCYMTwLnAIKWwJ:matrix.org"
+ACCESSTOKEN="mct_F4wO3L3Fk2jOWLAjNL3LEj4FONpxOj_6hFm3e"
