@@ -1,8 +1,6 @@
 const matrixSdk = require("matrix-js-sdk");
 const { logger } = require("matrix-js-sdk/lib/logger");
 const QRCode = require("qrcode");
-const fs = require("fs");
-const path = require("path");
 const { stdout, stderr } = require("process");
 const util = require("util");
 
@@ -68,8 +66,7 @@ logger.error = function (...msg) {
 };
 
 class MatrixNotifier {
-  constructor(envFilePath = path.resolve(process.cwd(), ".env")) {
-    this.envFilePath = path.resolve(envFilePath);
+  constructor() {
     this.loadConfig();
 
     // Initialize the Matrix Client with your permanent legacy token params
@@ -93,20 +90,19 @@ class MatrixNotifier {
    * Reads and parses the local configuration JSON file
    */
   loadConfig() {
-    if (!fs.existsSync(this.envFilePath)) {
-      throw new Error(`Environment file missing at path: ${this.envFilePath}`);
-    }
+    const envKeys = [
+      "BASEURL",
+      "USERID",
+      "TARGETROOMID",
+      "ACCESSTOKEN",
+      "PASSWORD",
+      "RECOVERYKEY",
+    ];
+    this.config = {};
 
-    this.config ??= {}; // Initialize config if not yet initialized
-    const result = require("dotenv").config({
-      path: this.envFilePath,
-      processEnv: this.config,
+    envKeys.forEach((key) => {
+      this.config[key] = process.env[key];
     });
-    if (result.error) {
-      throw new Error(
-        `Failed to read/parse environment file ${this.envFilePath}: ${result.error}`,
-      );
-    }
   }
 
   async pingMatrix() {
