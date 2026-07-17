@@ -1,4 +1,4 @@
-const MatrixNotifier = require("./MatrixNotifier.cjs");
+const MatrixNotifier = require("./MatrixNotifier.js");
 const notifier = new MatrixNotifier();
 const qrtxt = require("node:fs").readFileSync("./testqr.txt", "utf8");
 
