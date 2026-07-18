@@ -1,6 +1,11 @@
 const matrixSdk = require("matrix-js-sdk");
 const { logger } = require("matrix-js-sdk/lib/logger");
 const { CryptoEvent } = require("matrix-js-sdk/lib/crypto-api/CryptoEvent");
+const {
+  VerifierEvent,
+  VerificationPhase,
+  VerificationRequestEvent,
+} = require("matrix-js-sdk/lib/crypto-api/verification");
 const QRCode = require("qrcode");
 const { stdout, stderr } = require("process");
 const util = require("util");
@@ -206,7 +211,10 @@ class MatrixNotifier {
       //       dtcon.log("[Matrix Notifier] Request channel accepted.");
       //
       //       // 2. Set up a listener for when the remote device switches to the SAS/Emoji phase
-      //       request.on("change", async () => {
+      //       request.on(VerificationRequestEvent.Change, async () => {
+      //         if (request.phase == VerificationPhase.Ready) {
+      //           this.IsCryptoReady = true;
+      //         }
       //         // Check if the request lifecycle has advanced to the SAS verifier stage
       //         const verifier = request.verifier;
       //         if (verifier) {
@@ -215,7 +223,7 @@ class MatrixNotifier {
       //           );
       //
       //           // 3. Capture the calculated verification emojis
-      //           verifier.on("show_sas", async (sas) => {
+      //           verifier.on(VerifierEvent.ShowSas, async (sas) => {
       //             dtcon.log(
       //               "====================================================",
       //             );
@@ -249,14 +257,7 @@ class MatrixNotifier {
       //             );
       //           });
       //
-      //           verifier.on("done", () => {
-      //             this.isCryptoReady = true;
-      //             dtcon.log(
-      //               "[Matrix Notifier] SUCCESS: Device is verified on disk permanently.",
-      //             );
-      //           });
-      //
-      //           verifier.on("cancel", (error) => {
+      //           verifier.on(VerifierEvent.Cancel, (error) => {
       //             dtcon.log(
       //               `[Matrix Notifier] Sequence cancelled by peer: ${error.message}`,
       //             );
