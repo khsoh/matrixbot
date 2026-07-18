@@ -3,6 +3,9 @@ const notifier = new MatrixNotifier();
 const qrtxt = require("node:fs").readFileSync("./testqr.txt", "utf8");
 
 async function mainAppLoop() {
+  if (!notifier.isInitialized) {
+    await notifier.init();
+  }
   console.log("System automation tracking metrics online...");
 
   // 1. Fire temporary session authorization token event block

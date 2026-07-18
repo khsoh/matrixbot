@@ -1,8 +1,11 @@
 const matrixSdk = require("matrix-js-sdk");
 const { logger } = require("matrix-js-sdk/lib/logger");
+const { CryptoEvent } = require("matrix-js-sdk/lib/crypto-api/CryptoEvent");
 const QRCode = require("qrcode");
 const { stdout, stderr } = require("process");
 const util = require("util");
+const os = require("os");
+const path = require("path");
 
 function gentsdate(epochTime, override_opts = {}) {
   const options = {
@@ -65,15 +68,72 @@ logger.error = function (...msg) {
   dtcon.error(`[Matrix-js-sdk ERROR]: `, msg.join(" "));
 };
 
+/**
+ * A lightweight utility mapping browser localStorage features
+ * to real files on a Linux VPS disk.
+ */
+function createNodeLocalStorage(storePath) {
+  const fs = require("fs");
+  if (!fs.existsSync(storePath)) {
+    fs.mkdirSync(storePath, { recursive: true });
+  }
+
+  return {
+    getItem: (key) => {
+      const file = path.join(storePath, encodeURIComponent(key));
+      return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+    },
+    setItem: (key, value) => {
+      const file = path.join(storePath, encodeURIComponent(key));
+      fs.writeFileSync(file, value, "utf8");
+    },
+    removeItem: (key) => {
+      const file = path.join(storePath, encodeURIComponent(key));
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    },
+    clear: () => {
+      const files = fs.readdirSync(storePath);
+      for (const file of files) {
+        fs.unlinkSync(path.join(storePath, file));
+      }
+    },
+  };
+}
+
 class MatrixNotifier {
   constructor() {
     this.loadConfig();
+    this.isInitialized = false;
+    this.isCryptoReady = false;
+
+    // Point to a dedicated base-state data directory
+    const storePath = path.join(process.cwd(), ".matrix_client_store");
 
     // Initialize the Matrix Client with your permanent legacy token params
     this.client = matrixSdk.createClient({
       baseUrl: this.config.BASEURL,
       userId: this.config.USERID,
       accessToken: this.config.ACCESSTOKEN, // This long-lived token does not require refreshing
+      deviceId: os.hostname(),
+
+      store: new matrixSdk.MemoryStore({
+        localStorage: global.localStorage || createNodeLocalStorage(storePath),
+      }),
+      cryptoCallbacks: {
+        getSecretStorageKey: async ({ keys }, name) => {
+          dtcon.log(
+            `[Matrix Notifier] Unlocking Secret Storage key ID: ${name || "default"}`,
+          );
+          const keyId = Object.keys(keys);
+          if (!keyId || keyId.length === 0)
+            throw new Error("No secret storage key requested by server.");
+
+          const keyBackupKey = this.client.keyBackupKeyFromRecoveryKey(
+            this.config.RECOVERYKEY,
+          );
+          return [keyId[0], keyBackupKey];
+        },
+      },
     });
 
     setInterval(
@@ -108,6 +168,151 @@ class MatrixNotifier {
   async pingMatrix() {
     const profile = await this.client.getProfileInfo(this.config.USERID);
     dtcon.log(`[Matrix Notifier] Profile: ${JSON.stringify(profile, null, 2)}`);
+  }
+
+  async init() {
+    if (this.isInitialized) {
+      dtcon.log("[Matrix Notifier] Already initialized.");
+      return;
+    }
+
+    try {
+      const storagePath = path.join(process.cwd(), ".matrix_crypto_store");
+
+      // 1. Initialize persistent storage engine on disk
+      await this.client.initRustCrypto({
+        useIndexedDB: false,
+        cryptoStoreFactory: () => new matrixSdk.RustSdkCryptoStore(storagePath),
+      });
+      dtcon.log("[Matrix Notifier] Persistent Rust Crypto layer activated.");
+
+      const crypto = this.client.getCrypto();
+
+      // 2. Connect to and sync the key backup engine
+      await crypto.checkKeyBackupAndEnable();
+      dtcon.log("[Matrix Notifier] Server key backup engine enabled.");
+
+      // 3. FIXED: Use the direct, string-mapped event namespace to catch phone verification triggers
+      // this.client.on(
+      //   CryptoEvent.VerificationRequestReceived,
+      //   async (request) => {
+      //     dtcon.log(
+      //       `[Matrix Notifier] Hooked incoming handshake request from: ${request.otherUserId}`,
+      //     );
+      //
+      //     try {
+      //       // 1. Accept the incoming verification channel connection
+      //       await request.accept();
+      //       dtcon.log("[Matrix Notifier] Request channel accepted.");
+      //
+      //       // 2. Set up a listener for when the remote device switches to the SAS/Emoji phase
+      //       request.on("change", async () => {
+      //         // Check if the request lifecycle has advanced to the SAS verifier stage
+      //         const verifier = request.verifier;
+      //         if (verifier) {
+      //           dtcon.log(
+      //             "[Matrix Notifier] SAS Verifier object captured. Binding emoji hooks...",
+      //           );
+      //
+      //           // 3. Capture the calculated verification emojis
+      //           verifier.on("show_sas", async (sas) => {
+      //             dtcon.log(
+      //               "====================================================",
+      //             );
+      //             dtcon.log(
+      //               "[Matrix Notifier] HEADLESS SAS VERIFICATION MENU!",
+      //             );
+      //             dtcon.log(
+      //               "Please look at your phone/desktop Element screen.",
+      //             );
+      //             dtcon.log("Confirm that these exact 7 text mappings match:");
+      //             dtcon.log(
+      //               "====================================================",
+      //             );
+      //
+      //             const emojiString = sas.sas.emoji
+      //               .map(
+      //                 (e, idx) =>
+      //                   `${idx + 1}. [${e.emoji}] ${e.description.toUpperCase()}`,
+      //               )
+      //               .join("\n");
+      //
+      //             dtcon.log(emojiString);
+      //             dtcon.log(
+      //               "====================================================",
+      //             );
+      //
+      //             // Headlessly approve the bot's side of the verification
+      //             await verifier.verify();
+      //             dtcon.log(
+      //               "[Matrix Notifier] Handshake approved. Hit 'They Match' on your phone/PC!",
+      //             );
+      //           });
+      //
+      //           verifier.on("done", () => {
+      //             this.isCryptoReady = true;
+      //             dtcon.log(
+      //               "[Matrix Notifier] SUCCESS: Device is verified on disk permanently.",
+      //             );
+      //           });
+      //
+      //           verifier.on("cancel", (error) => {
+      //             dtcon.log(
+      //               `[Matrix Notifier] Sequence cancelled by peer: ${error.message}`,
+      //             );
+      //           });
+      //         }
+      //       });
+      //
+      //       dtcon.log(
+      //         "[Matrix Notifier] Waiting for you to choose 'Show Emojis' on your phone/PC client...",
+      //       );
+      //     } catch (err) {
+      //       dtcon.log(
+      //         `[Matrix Notifier] Error processing verification request: ${err.message}`,
+      //       );
+      //     }
+      //   },
+      // );
+
+      // 4. Start background sync loop
+      await this.client.startClient({ initialSyncLimit: 5 });
+
+      return new Promise((resolve, reject) => {
+        const onSync = async (state) => {
+          if (state === "PREPARED") {
+            this.isInitialized = true;
+            dtcon.log("[Matrix Notifier] Client timeline sync completed.");
+
+            // 5. Final fallback trust mapping verification
+            const backupInfo = await crypto.getKeyBackupInfo();
+            if (backupInfo) {
+              const trustInfo = await crypto.isKeyBackupTrusted(backupInfo);
+              if (trustInfo.trusted || trustInfo.matchesDecryptionKey) {
+                this.isCryptoReady = true;
+                dtcon.log(
+                  "[Matrix Notifier] E2EE baseline successfully validated.",
+                );
+              }
+            } else {
+              this.isCryptoReady = true;
+            }
+
+            this.client.removeListener("sync", onSync);
+            resolve();
+          }
+        };
+
+        this.client.on("sync", onSync);
+        setTimeout(() => {
+          this.client.removeListener("sync", onSync);
+          reject(new Error("Matrix client initial sync timed out"));
+        }, 30000);
+      });
+    } catch (error) {
+      dtcon.log(`[Matrix Notifier] Initialization failed: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
